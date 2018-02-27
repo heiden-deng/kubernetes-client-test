@@ -31,52 +31,64 @@ import io.fabric8.kubernetes.client.KubernetesClient;
 public class App 
 {
 	private static final Logger logger = LoggerFactory.getLogger(App.class);
+	private void test1(){
+		KubernetesClient kubernetesClient= connectK8s();
+		PodList pl = kubernetesClient.pods().list();
+		List<Pod> podList = pl.getItems();
+		for(Pod pod : podList) {
+			System.out.println("Pod Name=" + pod.getMetadata().getName() + "   status=" + pod.getStatus().toString());
+		}
+		Service sv = new ServiceBuilder()
+				.withNewMetadata().withName("nginx-ds-api").addToLabels("app", "nginx-ds-api").endMetadata()
+				.withNewSpec().withType("NodePort")
+				.withSelector(new HashMap<String,String>(){{put("app", "nginx-ds-api");}})
+				.withPorts(new ServicePortBuilder().withName("http").withPort(80).withNewTargetPort(80).build())
+				.endSpec()
+				.build();
+
+		List<Container> containers = new ArrayList<Container>();
+		Container container = new ContainerBuilder()
+				.withName("my-api-nginx")
+				.withImage("nginx:1.7.9")
+				.withPorts(new ContainerPortBuilder().withContainerPort(80).build())
+				.build();
+		containers.add(container);
+		DaemonSet ds = new DaemonSetBuilder()
+				.withNewMetadata().withName("nginx-ds-api").addToLabels("addonmanager.kubernetes.io/mode","Reconcile").endMetadata()
+				.withNewSpec()
+				.withNewTemplate()
+				.withNewMetadata().addToLabels("app", "nginx-ds-api").endMetadata()
+				.withNewSpec().withContainers(containers)
+				.endSpec()
+				.endTemplate()
+				.endSpec()
+				.build();
+
+		DaemonSet dsNew = kubernetesClient.extensions().daemonSets().inNamespace("default").create(ds);
+		log("create Daemonset",dsNew);
+
+		Service svNew = kubernetesClient.services().inNamespace("default").create(sv);
+		log("create Service",svNew);
+
+		PodList pl2 = kubernetesClient.pods().list();
+		List<Pod> podList2 = pl2.getItems();
+		for(Pod pod : podList2) {
+			System.out.println("Pod Name=" + pod.getMetadata().getName() + ",   status=" + pod.getStatus().toString());
+		}
+	}
+	private void test2(){
+		KubernetesClient kubernetesClient= connectK8sAdv();
+		PodList pl = kubernetesClient.pods().list();
+		List<Pod> podList = pl.getItems();
+		for(Pod pod : podList) {
+			System.out.println("Pod Name=" + pod.getMetadata().getName() + "   status=" + pod.getStatus().toString());
+		}
+	}
     public static void main( String[] args )
     {
-    	KubernetesClient kubernetesClient= connectK8s();
-    	PodList pl = kubernetesClient.pods().list();
-    	List<Pod> podList = pl.getItems();
-    	for(Pod pod : podList) {
-    		System.out.println("Pod Name=" + pod.getMetadata().getName() + "   status=" + pod.getStatus().toString());
-    	}
-    	Service sv = new ServiceBuilder()
-    			.withNewMetadata().withName("nginx-ds-api").addToLabels("app", "nginx-ds-api").endMetadata()
-    			.withNewSpec().withType("NodePort")
-    			  .withSelector(new HashMap<String,String>(){{put("app", "nginx-ds-api");}})
-    			  .withPorts(new ServicePortBuilder().withName("http").withPort(80).withNewTargetPort(80).build())
-    			 .endSpec()
-    			 .build(); 
-    			  
-    	List<Container> containers = new ArrayList<Container>();
-    	Container container = new ContainerBuilder()
-    			.withName("my-api-nginx")
-    			.withImage("nginx:1.7.9")
-    			.withPorts(new ContainerPortBuilder().withContainerPort(80).build())
-    			.build();
-    	containers.add(container);
-    	DaemonSet ds = new DaemonSetBuilder()
-    			.withNewMetadata().withName("nginx-ds-api").addToLabels("addonmanager.kubernetes.io/mode","Reconcile").endMetadata()
-    			.withNewSpec()
-    			 .withNewTemplate()
-    			   .withNewMetadata().addToLabels("app", "nginx-ds-api").endMetadata()
-    			   .withNewSpec().withContainers(containers)
-    			   .endSpec()
-    			 .endTemplate()
-    			 .endSpec()
-    			 .build();
-			   
-    	DaemonSet dsNew = kubernetesClient.extensions().daemonSets().inNamespace("default").create(ds);		  
-    	log("create Daemonset",dsNew);
-    	
-    	Service svNew = kubernetesClient.services().inNamespace("default").create(sv);
-    	log("create Service",svNew);
-    	
-    	PodList pl2 = kubernetesClient.pods().list();
-    	List<Pod> podList2 = pl2.getItems();
-    	for(Pod pod : podList2) {
-    		System.out.println("Pod Name=" + pod.getMetadata().getName() + ",   status=" + pod.getStatus().toString());
-    	}
-    	
+
+		App app = new App();
+		app.test2();
         System.out.println( "Hello World!" );
     }
     /**
@@ -98,6 +110,22 @@ public class App
           }
           return client;
     }
+	public static KubernetesClient connectK8sAdv(){
+		System.setProperty(Config.KUBERNETES_KUBECONFIG_FILE, "/Users/dengjq/dev/k8s/key/kubernetes/admin.conf");
+		String namespace = "default";
+		String master = "https://192.168.100.172:6443/";
+		KubernetesClient client=null;
+		Config config = new ConfigBuilder().withMasterUrl(master)
+				.withTrustCerts(true)
+				.withNamespace(namespace).build();
+		try {
+			client = new DefaultKubernetesClient(config);
+
+		}catch (Exception e) {
+			logger.error(e.getMessage(), e);
+		}
+		return client;
+	}
     private static void log(String action, Object obj) {
         logger.info("{}: {}", action, obj);
     }
